@@ -263,7 +263,7 @@ Programa principal em C que roda no Linux do HPS, atuando como orquestrador do s
 ## 8. Testes e Validação
 **Vizinho Mais Próximo**
 
-![vizinho-mais-proximo](imgs/vizinho-proximo.gif)
+![vizinho-mais-proximo](imgs/vizinho_proximo.gif)
 
 **Replicação de Pixel**
 
@@ -273,15 +273,16 @@ Programa principal em C que roda no Linux do HPS, atuando como orquestrador do s
 Validou-se que o cursor gerado pela FPGA segue o movimento físico do mouse sem atrasos perceptíveis, confirmando a eficiência da leitura via thread separada.
 
 ### 8.2. Definição de Janela
-O teste consistiu em clicar em dois pontos distintos da tela. Observou-se que, imediatamente após o segundo clique, a região interna passa a ser gerenciada pela memória de zoom, validando a lógica de overlay e os registradores de janela.
+O teste consistiu em clicar em dois pontos distintos da tela (Foi optado pela equipe a seleção apenas de pontos da **Esquerda** para a **Direita**). Observou-se que, após o segundo clique, a região interna passa a ser gerenciada pela memória de zoom, validando a lógica de overlay e os registradores de janela.
 
 ### 8.3. Zoom Localizado
-Ao aplicar zoom (+) com uma janela ativa, apenas o conteúdo interno à borda foi ampliado. O centro da janela foi preservado graças ao cálculo de offset implementado no software e à lógica de shift dinâmico no hardware.
+Ao aplicar zoom (+) com uma janela ativa, apenas o conteúdo interno à borda foi ampliado (Limite de 8x no zoom). O centro da janela foi preservado graças ao cálculo de offset implementado no software e à lógica de shift dinâmico no hardware.
+
+### 8.4. Zoom Out
+Ao aplicar zoom Out (-) com uma janela ativa, apenas o conteúdo interno à borda foi reduzido (limitada ao tamanho original da imagem). O centro da janela foi preservado graças ao cálculo de offset implementado no software e à lógica de shift dinâmico no hardware.
 
 ## 9. Análise dos Resultados
 
-A implementação da **Etapa 3** foi bem-sucedida. A transição de um controle via teclado para um sistema baseado em mouse elevou a dificuldade, exigindo o uso de conceitos de sistemas operacionais (Threads e Mutex) e lógica digital de Overlay.
+A implementação foi bem-sucedida. A transição de um controle via teclado para um sistema baseado em mouse adicionou uma complexidade, exigindo o uso de conceitos de sistemas operacionais como Threads e Mutex e lógica de Overlay.
 
 Um ponto crítico resolvido foi a **sincronização de estado**: ao criar uma nova janela, o software força um reset na FPGA (`coproc_reset_image`) antes de ativar a nova região. Isso garante que tanto o contador lógico de zoom do software quanto o estado da FSM do hardware comecem sincronizados em 1x, prevenindo desalinhamentos visuais.
-
-O sistema final permite uma inspeção de imagem muito mais intuitiva e ágil do que a versão anterior.
