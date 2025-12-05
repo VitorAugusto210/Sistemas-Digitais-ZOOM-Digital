@@ -181,8 +181,6 @@ Após executar o programa (`sudo ./app`), os seguintes comandos estão disponív
 A arquitetura do projeto é um **sistema híbrido Hardware-Software**. O diagrama abaixo ilustra o fluxo de dados completo, desde a captura dos eventos do mouse no Linux até a renderização dos pixels no monitor via FPGA.
 
 ![Diagrama de Blocos da Arquitetura](imgs/diagrama.png)
-### 7.1. `soc_system.qsys` (Sistema HPS e Barramento)
-...
 
 ### 7.1. `soc_system.qsys` (Sistema HPS e Barramento)
 
