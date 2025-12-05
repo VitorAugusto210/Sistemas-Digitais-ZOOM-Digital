@@ -41,7 +41,7 @@ A base do código em Verilog foi adaptada do repositório: <https://github.com/D
 
 ## 2. Definição do Problema
 
-O foco deste estágio é a evolução da interface e a sincronização entre processos de software e hardware.
+O foco deste projeto é a evolução da interface e a sincronização entre processos de software e hardware.
 
 O objetivo é projetar um sistema onde o usuário possa utilizar um mouse para desenhar uma janela sobre a imagem original. O coprocessador deve então aplicar os algoritmos de zoom apenas dentro dessa janela delimitada, mantendo o restante da imagem original como fundo (background).
 
@@ -85,7 +85,7 @@ Aproximar uma imagem significa criar novos pixels onde antes não existia inform
 
 Tradicionalmente, reduzir uma imagem envolve descartar informações (Decimação) ou combinar pixels (Média) para caber numa resolução menor. No entanto, neste projeto, adotou-se uma abordagem não destrutiva para a navegação entre níveis de zoom.
 
-* **Regressão de Nível (Level Regression):**
+* **Regressão de Nível:**
     * **Teoria:** Em vez de processar a imagem que já está na tela (que já sofreu zoom/interpolação) aplicando um filtro de redução sobre ela, o sistema "volta".
     * **Funcionamento:** Quando o utilizador solicita um Zoom Out (ex: de 4x para 2x), o controlador decrementa o fator de escala global e solicita ao coprocessador que gere a imagem novamente a partir da **Memória Original (Source)**.
     * **Vantagem:** Isso evita a degradação cumulativa da imagem (artefatos de reamostragem) que ocorreria ao aplicar múltiplos filtros em cascata. Garante que a visualização de um nível de zoom (ex: 2x) seja sempre idêntica e perfeita, independentemente se o utilizador chegou a esse nível vindo de 1x (Zoom In) ou de 4x (Zoom Out).
@@ -199,6 +199,10 @@ Este é o arquivo Verilog de nível mais alto do projeto. Ele representa o desig
 
 Este é o coração da lógica de FPGA customizada. Nesta etapa, o módulo evoluiu de um processador de "tela cheia" para um gerenciador de janelas e sobreposições (overlays).
 
+**Interface do Módulo:**
+* **Entradas:** `CLOCK_50` (50MHz), `INSTRUCTION` (Opcode), `DATA_IN` (Dados), `MEM_ADDR` (Endereço), `SEL_MEM` (Seleção de Banco), `ENABLE` (Pulso de ativação).
+* **Saídas:** `DATA_OUT` (Leitura), `FLAG_DONE` (Status), `VGA_R/G/B` (Vídeo), `VGA_HS/VS` (Sincronismo).
+
 * **Propósito:** Implementar a Máquina de Estados Finitos (FSM), o *datapath* para os algoritmos de zoom e o pipeline de vídeo com suporte a cursor e janelas.
 
 * **Componentes Chave:**
@@ -208,6 +212,17 @@ Este é o coração da lógica de FPGA customizada. Nesta etapa, o módulo evolu
         1.  **Camada 1 (Cursor):** Se o pixel atual pertence à cruz do mouse, exibe **Vermelho**.
         2.  **Camada 2 (Janela):** Se está dentro da janela ativa, exibe o conteúdo da **Memória de Zoom** (`mem2`).
         3.  **Camada 3 (Fundo):** Caso contrário, exibe o conteúdo da **Memória Original** (`mem1`).
+
+        **Detalhamento da Lógica de Overlay:**
+        O trecho abaixo demonstra o multiplexador que decide a prioridade de exibição (Cursor > Janela > Fundo) dentro do bloco `always @(posedge clk_100)`:
+        ```verilog
+        if (inside_box) begin
+            if (is_cursor) data_to_vga_pipe <= 8'b11100000; // Cursor
+            else if (is_window_area) data_to_vga_pipe <= data_out_mem2; // Janela (Zoom)
+            else data_to_vga_pipe <= data_out_mem1; // Fundo (Original)
+        end else data_to_vga_pipe <= 8'b0;
+        ```
+
     * **Memórias (`mem1`):** O sistema utiliza três instâncias de memória RAM:
         1. `memory1`: Imagem original (fundo).
         2. `memory2`: Imagem processada (janela).
@@ -255,10 +270,24 @@ Este é um ficheiro de cabeçalho em C que centraliza endereços e códigos.
 
 Programa principal em C que roda no Linux do HPS, atuando como orquestrador do sistema.
 
+**Interface da Aplicação:**
+* **Entradas:** Arquivos de imagem (`.bmp`), Eventos do Mouse via device file (`/dev/input/mice`), Comandos de Teclado (`stdin`).
+* **Saídas:** Comandos de controle para FPGA (via mapeamento de memória), Feedback visual no Terminal (`stdout`).
+
 * **Propósito:** Interface do usuário e lógica de controle de alto nível.
 * **Novidades (Etapa 3):**
     * **Arquitetura Multithread (`pthread`):** Utiliza duas threads: uma para gerir o menu/teclado e outra (`mouse_thread_func`) dedicada à leitura contínua do rato (`/dev/input/mice`), garantindo fluidez.
     * **Controlo de Concorrência (Mutex):** Usa `pthread_mutex_t` para proteger o acesso aos registradores da FPGA, evitando conflitos de escrita.
+
+    **Detalhamento do Controle de Concorrência:**
+    O uso de Mutex garante que a thread do mouse não tente escrever nos registradores enquanto a thread principal está enviando dados (ex: reset de imagem).
+    ```c
+    // Exemplo na Thread do Mouse (mouse_thread_func)
+    pthread_mutex_lock(&fpga_mutex); // Bloqueia acesso
+    coproc_update_mouse(g_mouse_x, g_mouse_y); // Atualiza Hardware
+    pthread_mutex_unlock(&fpga_mutex); // Libera acesso
+    ```
+
     * **Máquina de Estados de Janela:** Gere a lógica de cliques (1º clique -> 2º clique -> janela ativa).
     * **Cálculo de Offset Matemático:** Calcula o ponto de origem da memória para garantir que o zoom seja aplicado no centro da janela definida, compensando o fator de escala.
 
